@@ -16,8 +16,16 @@ PWM:
 .cseg
 .org 0x0000
 	jmp RESET
+.org 0x0042
+	jmp timer
+.org INT2addr
+	jmp EXT_INT2
+.org INT1addr
+	jmp EXT_INT1
 .org OVF3addr
 	jmp OVF3address
+
+
 
 RESET:
 	ldi temp1, high(RAMEND)
@@ -33,7 +41,7 @@ RESET:
 	sts PWM, temp ; Bit 4 will function as OC5A.
 	;clr temp
 	;out PORTA, temp
-	ldi temp, 0x2F ; the value controls the PWM duty cycle
+	ldi temp, 0x0A ; the value controls the PWM duty cycle
 	sts OCR3BL, temp
 	clr temp
 	sts OCR3BH, temp
@@ -42,16 +50,30 @@ RESET:
 	sts TCCR3B, temp
 	ldi temp, (1<< WGM30)|(1<<COM3A1)
 	sts TCCR3A, temp
-	ldi temp1, 1 << TOIE3
+	ldi temp1, 7 << TOIE3
 	sts TIMSK3, temp1
+
+	in temp1, EIMSK ; enable INT2
+	ori temp1, (1<<INT2)
+	out EIMSK, temp1
+
+;	ldi temp1, (2 << ISC01) ; set INT2 as fallingsts EICRA, temp1 ; edge triggered interrupt
+;	sts EICRA, temp1
+
+	in temp1, EIMSK ; enable INT2
+	ori temp1, (1<<INT1)
+	out EIMSK, temp1
+
+	in temp1, EIMSK ; enable INT2
+	ori temp1, (1<<INT0)
+	out EIMSK, temp1
+
+	ldi temp1, (2 << ISC00 | 2 << ISC01) ; set INT2 as fallingsts EICRA, temp1 ; edge triggered interrupt
+	sts EICRA, temp1
+
 	sei
 halt:
-	;lds r24, OCR3BL
-	;lds r25, OCR3BH
-	lds r24, OCR3BL
-	;ser r24
-	
-	out PORTE, r24
+
 	rjmp halt
 
 OVF3address:
@@ -59,11 +81,60 @@ OVF3address:
 	push temp1
 	push YH
 	push YL
-
+	;lds r24, OCR3BL
+	;lds r25, OCR3BH
+	lds r24, OCR3BL
+	;ser r24
+	
+	out PORTE, r24
 
 
 	pop YL
 	pop YH
 	pop r20
 	out SREG, temp1
+	reti
+timer:
+	in temp1, SREG ;temp1 is temp 
+	push temp1
+	push YH
+	push YL
+	;lds r24, OCR3BL
+	;lds r25, OCR3BH
+	lds r24, PWM
+	;ser r24
+	com r24
+	sts PWM, r24
+	out PORTE, r24
+
+	pop YL
+	pop YH
+	pop r20
+	out SREG, temp1
+	reti
+
+EXT_INT2:
+	push r24
+	push r25
+	ldi temp, 0x10 ; the value controls the PWM duty cycle
+
+	sts OCR3BL, temp
+	clr temp
+	sts OCR3BH, temp
+
+	pop r25
+	pop r24
+	reti
+
+EXT_INT1:
+	push r24
+	push r25
+	ldi temp, 0x00 ; the value controls the PWM duty cycle
+
+	sts OCR3BL, temp
+	clr temp
+	sts OCR3BH, temp
+
+	pop r25
+	pop r24
 	reti
