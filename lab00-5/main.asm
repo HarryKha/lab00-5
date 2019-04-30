@@ -1,4 +1,5 @@
 .include "m2560def.inc"
+	.def temp = r16
 	.def temp1 = r20
 	.def temp2 = r21
 	.equ F_CPU = 16000000
@@ -42,12 +43,20 @@ TempCounter:
 SecondCounter:
 	.byte 2
 QuarterRevolution:
+	.byte 2
+Button1:
+	.byte 1
+Button2:
 	.byte 1
 
 .cseg
 .org 0x0000
 	jmp RESET
 
+.org INT0addr
+	jmp EXT_INT0
+.org INT1addr
+	jmp EXT_INT1
 .org INT2addr
 	jmp EXT_INT2
 .org OVF0addr
@@ -67,13 +76,16 @@ OVF0address: ;timer0 overflow
 	push YH
 	push YL
 
+	cli
+
 	lds r24, TempCounter ;load tempcounter into r25:r24
 	lds r25, TempCounter + 1
 	adiw r25:r24, 1 ;increase tempcounter by 1
-	cpi r24, low(7812/4) ;7812 * 2 
-	ldi temp1, high(7812/4) ;compare tempcounter with 2 seconds
+	cpi r24, low(7812/2) ;7812 * 2 
+	ldi temp1, high(7812/2) ;compare tempcounter with 2 seconds
 	cpc r25, temp1
 		brne NotSecond 
+	lds r24, button1
 
 novrflw:
 
@@ -85,11 +97,14 @@ novrflw:
 	sts SecondCounter + 1, r25
 
 	lds r24, QuarterRevolution
-;	lds r25, QuarterRevolution + 1
+	lds r25, QuarterRevolution + 1
 
+	
 
 	;enter code to dispay rotations per second
-	;lsr r24 ;divide total quater turns by 2 to make half turns (half second refresh rate)
+
+	lsr r25
+	ror r24 ;divide total quater turns by 2 to make half turns (half second refresh rate)
 	rcall display
 	rjmp endOVF0
 NotSecond:
@@ -103,6 +118,7 @@ endOVF0:
 	pop YH
 	pop temp1
 	out SREG, temp1
+	sei
 	reti
 display:
 
@@ -120,16 +136,23 @@ display:
 	clr temp2
 
 Hundreds:
-	cpi r24, 100
-	brlo Tens
-	subi r24, 100
+
+	cpi r24, low(100)
+	ldi r17, high(100)
+	cpc r25, r17
+		brlo Tens
+	subi r24, low(100)
+	sbc r25, r17
 	inc temp1
 	rjmp Hundreds
 
 Tens:
-	cpi r24, 10
-	brlo Converted
-	subi r24, 10
+	cpi r24, low(10)
+	ldi r17, high(10)
+	cpc r25, r17
+		brlo Converted
+	subi r24, low(10)
+	sbc r25, r17
 	inc temp2
 	rjmp Tens
 Converted:
@@ -174,11 +197,43 @@ start:
 	out PORTF, temp1
 	out PORTA, temp1
 
-	ldi temp1, (2 << ISC10) ; set INT2 as fallingsts EICRA, temp1 ; edge triggered interrupt
-	sts EICRA, temp1
+	;ldi temp1, (2 << ISC10) ; set INT2 as fallingsts EICRA, temp1 ; edge triggered interrupt
+	;sts EICRA, temp1
+
 	in temp1, EIMSK ; enable INT2
 	ori temp1, (1<<INT2)
 	out EIMSK, temp1
+
+;	ldi temp1, (2 << ISC01) ; set INT2 as fallingsts EICRA, temp1 ; edge triggered interrupt
+;	sts EICRA, temp1
+
+	in temp1, EIMSK ; enable INT2
+	ori temp1, (1<<INT1)
+	out EIMSK, temp1
+
+	in temp1, EIMSK ; enable INT2
+	ori temp1, (1<<INT0)
+	out EIMSK, temp1
+
+	ldi temp1, (2 << ISC00 | 2 << ISC01 | 2 << ISC11) ; set INT2 as fallingsts EICRA, temp1 ; edge triggered interrupt
+	sts EICRA, temp1
+
+	ldi temp1, 0b00010000
+	;ser temp1
+	out DDRE, temp1
+
+;	sts PWM, temp ; Bit 4 will function as OC3A.
+	;clr temp
+	;out PORTA, temp
+	ldi temp1, 0x00 ; the value controls the PWM duty cycle
+	sts OCR3BL, temp1
+	clr temp1
+	sts OCR3BH, temp1	
+	; Set the Timer5 to Phase Correct PWM mode.
+	ldi temp1, (1 << CS30)
+	sts TCCR3B, temp1
+	ldi temp1, ((1<< WGM30)|(1<<COM3B1))
+	sts TCCR3A, temp1
 
 	ldi temp1, 0b00000000 ;setting up the timer
 	out TCCR0A, temp1
@@ -186,7 +241,6 @@ start:
 	out TCCR0B, temp1 ;set Prescaling value to 8
 	ldi temp1, 1<<TOIE0 ;128 microseconds
 	sts TIMSK0, temp1 ;T/C0 interrupt enable
-	sei ;enable the global interrupt
 
 	do_lcd_command 0b00111000 ; 2x5x7
 	rcall sleep_5ms
@@ -202,8 +256,12 @@ start:
 	clear TempCounter
 	clear SecondCounter
 	clear QuarterRevolution
+	clear Button1
+	clear Button2
 
 	ldi r19, 48
+
+	sei
 
 	rjmp loop
 
@@ -272,14 +330,49 @@ delayloop_1ms:
 	pop r25
 	pop r24
 	ret
+
+EXT_INT0:
+	push r24
+	push r25
+
+
+	ldi temp, 0xFF ; the value controls the PWM duty cycle
+
+	sts OCR3BL, temp
+	clr temp
+	sts OCR3BH, temp
+
+	ldi r24, 1
+	sts button1, r24
+
+	pop r25
+	pop r24
+	reti
+
+EXT_INT1:
+	push r24
+	push r25
+	ldi temp, 0x2A ; the value controls the PWM duty cycle
+
+	sts OCR3BL, temp
+	clr temp
+	sts OCR3BH, temp
+
+	ldi r24, 1
+	sts button2, r24
+
+	pop r25
+	pop r24
+	reti
 EXT_INT2:
 	push r24
-;	push r25
+	push r25
 	lds r24, QuarterRevolution
-;	lds r25, QuarterRevolution + 1
-;	adiw r25:r24, 1
-	subi r24, -1
+	lds r25, QuarterRevolution + 1
+	adiw r25:r24, 1
+;	inc r24
 	sts QuarterRevolution, r24
-;	sts QuarterRevolution + 1, r25 
+	sts QuarterRevolution + 1, r25 
+	pop r25
 	pop r24
 	reti
