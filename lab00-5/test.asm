@@ -16,14 +16,14 @@ PWM:
 .cseg
 .org 0x0000
 	jmp RESET
-.org 0x0042
-	jmp timer
-.org INT2addr
-	jmp EXT_INT2
+
+.org INT0addr
+	jmp EXT_INT0
 .org INT1addr
 	jmp EXT_INT1
-.org OVF3addr
-	jmp OVF3address
+
+
+
 
 
 
@@ -33,29 +33,23 @@ RESET:
 	ldi temp1, low(RAMEND)
 	out SPL, temp1
 
-	ser temp
-	out DDRE, temp
-	clr temp
-	out PORTE, temp
-	ldi temp, 0b00010000
-	sts PWM, temp ; Bit 4 will function as OC5A.
+	ldi temp1, 0b00010000
+	;ser temp1
+	out DDRE, temp1
+
+;	sts PWM, temp ; Bit 4 will function as OC3A.
 	;clr temp
 	;out PORTA, temp
-	ldi temp, 0x0A ; the value controls the PWM duty cycle
-	sts OCR3BL, temp
-	clr temp
-	sts OCR3BH, temp
+	ldi temp1, 0xFF ; the value controls the PWM duty cycle
+	sts OCR3BL, temp1
+	clr temp1
+	sts OCR3BH, temp1	
 	; Set the Timer5 to Phase Correct PWM mode.
-	ldi temp, (1 << CS30)
-	sts TCCR3B, temp
-	ldi temp, (1<< WGM30)|(1<<COM3A1)
-	sts TCCR3A, temp
-	ldi temp1, 7 << TOIE3
-	sts TIMSK3, temp1
+	ldi temp1, (1 << CS30)
+	sts TCCR3B, temp1
+	ldi temp1, ((1<< WGM30)|(1<<COM3B1))
+	sts TCCR3A, temp1
 
-	in temp1, EIMSK ; enable INT2
-	ori temp1, (1<<INT2)
-	out EIMSK, temp1
 
 ;	ldi temp1, (2 << ISC01) ; set INT2 as fallingsts EICRA, temp1 ; edge triggered interrupt
 ;	sts EICRA, temp1
@@ -68,55 +62,22 @@ RESET:
 	ori temp1, (1<<INT0)
 	out EIMSK, temp1
 
-	ldi temp1, (2 << ISC00 | 2 << ISC01) ; set INT2 as fallingsts EICRA, temp1 ; edge triggered interrupt
+	ldi temp1, (2 << ISC00 | 2 << ISC01 | 2 << ISC10) ; set INT2 as fallingsts EICRA, temp1 ; edge triggered interrupt
 	sts EICRA, temp1
 
 	sei
-halt:
 
+halt:
 	rjmp halt
 
-OVF3address:
-	in temp1, SREG ;temp1 is temp 
-	push temp1
-	push YH
-	push YL
-	;lds r24, OCR3BL
-	;lds r25, OCR3BH
-	lds r24, OCR3BL
-	;ser r24
-	
-	out PORTE, r24
 
 
-	pop YL
-	pop YH
-	pop r20
-	out SREG, temp1
-	reti
-timer:
-	in temp1, SREG ;temp1 is temp 
-	push temp1
-	push YH
-	push YL
-	;lds r24, OCR3BL
-	;lds r25, OCR3BH
-	lds r24, PWM
-	;ser r24
-	com r24
-	sts PWM, r24
-	out PORTE, r24
-
-	pop YL
-	pop YH
-	pop r20
-	out SREG, temp1
-	reti
-
-EXT_INT2:
+EXT_INT0:
 	push r24
 	push r25
-	ldi temp, 0x10 ; the value controls the PWM duty cycle
+
+
+	ldi temp, 0xFF ; the value controls the PWM duty cycle
 
 	sts OCR3BL, temp
 	clr temp
@@ -129,7 +90,7 @@ EXT_INT2:
 EXT_INT1:
 	push r24
 	push r25
-	ldi temp, 0x00 ; the value controls the PWM duty cycle
+	ldi temp, 0x2A ; the value controls the PWM duty cycle
 
 	sts OCR3BL, temp
 	clr temp
