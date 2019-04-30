@@ -82,29 +82,10 @@ OVF0address: ;timer0 overflow
 
 	cli
 
-	lds r24, OCR3BL
 
-	cpi r24, 0
-		brne Startmotortimer
+
 	rjmp continueOVF0
 
-Startmotortimer:
-	lds r24, MotorTimer
-	lds r25, MotorTimer + 1
-	adiw r25:r24, 1
-	sts MotorTimer, r24
-	sts MotorTimer + 1, r25
-	cpi r24, low(7812)
-	ldi temp1, high(7812)
-	cpc r25, temp1
-		breq defaultspeed
-	rjmp continueOVF0
-
-defaultspeed:
-	clear MotorTimer
-	ldi temp1, 0x77
-	sts OCR3BL, temp1
-	rjmp continueOVF0
 
 continueOVF0:
 	lds r24, TempCounter ;load tempcounter into r25:r24
@@ -162,9 +143,25 @@ display:
 	do_lcd_command 0b00001110 ; Cursor on, bar, no blink
 	clr temp1
 	clr temp2
+	lds temp2, Target
+	cp r24, temp2
+	lds temp2, OCR3BL
+	brlo increasepwm
+	subi temp2, 6
+	brlo underflow
+
+increasepwm:
+	subi temp2, -3
+	sts OCR3BL, temp2
+	rjmp Hundreds
+underflow:
+	clr temp2
+	sts OCR3BL, temp2
+	clr temp1
+	clr temp2
 
 Hundreds:
-
+	clr temp2
 	cpi r24, low(100)
 	ldi r17, high(100)
 	cpc r25, r17
