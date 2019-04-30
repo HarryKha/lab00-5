@@ -44,10 +44,8 @@ SecondCounter:
 	.byte 2
 QuarterRevolution:
 	.byte 2
-Button1:
-	.byte 1
-Button2:
-	.byte 1
+MotorTimer:
+	.byte 2
 
 .cseg
 .org 0x0000
@@ -78,6 +76,31 @@ OVF0address: ;timer0 overflow
 
 	cli
 
+	lds r24, OCR3BL
+
+	cpi r24, 0
+		brne Startmotortimer
+	rjmp continueOVF0
+
+Startmotortimer:
+	lds r24, MotorTimer
+	lds r25, MotorTimer + 1
+	adiw r25:r24, 1
+	sts MotorTimer, r24
+	sts MotorTimer + 1, r25
+	cpi r24, low(7812)
+	ldi temp1, high(7812)
+	cpc r25, temp1
+		breq turnoffmotor
+	rjmp continueOVF0
+
+turnoffmotor:
+	clear MotorTimer
+	ldi temp1, 0x00
+	sts OCR3BL, temp1
+	rjmp continueOVF0
+
+continueOVF0:
 	lds r24, TempCounter ;load tempcounter into r25:r24
 	lds r25, TempCounter + 1
 	adiw r25:r24, 1 ;increase tempcounter by 1
@@ -85,7 +108,6 @@ OVF0address: ;timer0 overflow
 	ldi temp1, high(7812/2) ;compare tempcounter with 2 seconds
 	cpc r25, temp1
 		brne NotSecond 
-	lds r24, button1
 
 novrflw:
 
@@ -256,9 +278,7 @@ start:
 	clear TempCounter
 	clear SecondCounter
 	clear QuarterRevolution
-	clear Button1
-	clear Button2
-
+	clear MotorTimer
 	ldi r19, 48
 
 	sei
@@ -342,9 +362,6 @@ EXT_INT0:
 	clr temp
 	sts OCR3BH, temp
 
-	ldi r24, 1
-	sts button1, r24
-
 	pop r25
 	pop r24
 	reti
@@ -357,9 +374,6 @@ EXT_INT1:
 	sts OCR3BL, temp
 	clr temp
 	sts OCR3BH, temp
-
-	ldi r24, 1
-	sts button2, r24
 
 	pop r25
 	pop r24
